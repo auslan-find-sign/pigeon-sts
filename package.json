@@ -1,0 +1,27 @@
+{
+  "name": "pigeon-sts",
+  "version": "1.0.0",
+  "description": "Pigeon Spread The Sign is a spider for capturing the content of Spread The Sign for inclusion in Auslan Find Sign",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "test": "mocha test"
+  },
+  "author": "Phoenix Fox",
+  "license": "Unlicense",
+  "dependencies": {
+    "cross-fetch": "^3.1.5",
+    "fs-extra": "^10.1.0",
+    "p-queue": "^7.2.0",
+    "parse-duration": "^1.0.2",
+    "pigeonmark-html": "^1.0.2",
+    "pigeonmark-select": "^2.0.0",
+    "pigeonmark-utils": "^2.0.2",
+    "uri-tag": "^1.4.1",
+    "yargs": "^17.5.1"
+  },
+  "devDependencies": {
+    "chai": "^4.3.6",
+    "mocha": "^10.0.0"
+  }
+}
