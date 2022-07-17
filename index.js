@@ -74,16 +74,21 @@ function tagify (str) {
   return str.replace(/[^a-zA-Z_-]+/gmi, '.').toLowerCase().replace(/\.+/gmi, '.').replace(/_+/gmi, '_').replace(/-+/gmi, '-')
 }
 
+// to workaround v8 https://bugs.chromium.org/p/v8/issues/detail?id=2869 causing massive catastrophic memory leak
+function unslice (str) {
+  return (' ' + str).substring(1)
+}
+
 async function scrapePage ({ searchData, entryURL, categories, category }) {
   console.log(`Reading ${entryURL}`)
   const page = await readSite(entryURL)
-  const id = entryURL.split('/').find(x => x.match(/^[0-9]+$/))
-  const canonicalLink = rel(pm.get.attribute(selectOne(page, 'link[rel=canonical]'), 'href'), entryURL)
-  const title = pm.get.text(selectOne(page, '.search-result-content h2')).trim()
-  const kind = pm.get.text(selectOne(page, '.search-result.open small')).trim()
-  const body = pm.get.attribute(selectOne(page, 'meta[name=description]'), 'content')
+  const id = unslice(entryURL.split('/').find(x => x.match(/^[0-9]+$/)))
+  const canonicalLink = unslice(rel(pm.get.attribute(selectOne(page, 'link[rel=canonical]'), 'href'), entryURL))
+  const title = unslice(pm.get.text(selectOne(page, '.search-result-content h2')).trim())
+  const kind = unslice(pm.get.text(selectOne(page, '.search-result.open small')).trim())
+  const body = unslice(pm.get.attribute(selectOne(page, 'meta[name=description]'), 'content'))
   const media = selectAll(page, 'video').map(x => (
-    { method: 'fetch', url: pm.get.attribute(x, 'src') }
+    { method: 'fetch', url: unslice(pm.get.attribute(x, 'src')) }
   ))
 
   if (media.length > 0) {
@@ -131,7 +136,7 @@ async function run () {
 
   const categoryEntryURLs = {}
 
-  const categoryQueue = new PQueue({ concurrency: argv.concurrency })
+  const queue = new PQueue({ concurrency: argv.concurrency })
 
   const scrapeCategory = async ({ pageURL, entryURLs }) => {
     console.log(`Scanning ${pageURL}`)
@@ -139,7 +144,7 @@ async function run () {
     const nextPageLink = selectOne(page, '.search-pager-next a')
     const resultLinks = selectAll(page, '.search-result-title a')
     for (const resultLink of resultLinks) {
-      const resultURL = rel(pm.get.attribute(resultLink, 'href'), pageURL)
+      const resultURL = unslice(rel(pm.get.attribute(resultLink, 'href'), pageURL))
       if (!entryURLs.includes(resultURL)) {
         entryURLs.push(resultURL)
       }
@@ -147,8 +152,8 @@ async function run () {
 
     // continue through next pages...
     if (nextPageLink) {
-      categoryQueue.add(() =>
-        scrapeCategory({ entryURLs, pageURL: rel(pm.get.attribute(nextPageLink, 'href'), pageURL) })
+      queue.add(() =>
+        scrapeCategory({ entryURLs, pageURL: unslice(rel(pm.get.attribute(nextPageLink, 'href'), pageURL)) })
       )
     }
   }
@@ -159,20 +164,21 @@ async function run () {
     const entryURLs = categoryEntryURLs[category] = []
     let pageURL = categories[category]
 
-    categoryQueue.add(() => scrapeCategory({ pageURL, entryURLs }))
+    queue.add(() => scrapeCategory({ pageURL, entryURLs }))
   }
 
-  await categoryQueue.onEmpty()
+  await queue.onEmpty()
 
-  const pageQueue = new PQueue({ concurrency: argv.concurrency })
   for (const category in categoryEntryURLs) {
     const categoryEntries = categoryEntryURLs[category]
     for (const entryURL of categoryEntries) {
-      pageQueue.add(() => scrapePage({ searchData, entryURL, categories, category }))
+      queue.add(() => scrapePage({ searchData, entryURL, categories, category }))
     }
+
+    await queue.onEmpty()
   }
 
-  await pageQueue.onEmpty()
+  await queue.onEmpty()
 
   await fs.writeJson(argv.data, searchData)
 }
