@@ -44,6 +44,11 @@ const { argv } = yargs(hideBin(process.argv))
     default: 10,
     description: 'How many parallel requests are allowed?'
   })
+  .option('verbose', {
+    alias: 'v',
+    type: 'boolean',
+    description: 'emit very verbose logs'
+  })
 
 async function readSite (url) {
   if (argv.cacheFolder) {
@@ -80,7 +85,7 @@ function unslice (str) {
 }
 
 async function scrapePage ({ searchData, entryURL, categories, category }) {
-  console.log(`Reading ${entryURL}`)
+  if (argv.verbose) console.log(`Reading ${entryURL}`)
   const page = await readSite(entryURL)
   const id = unslice(entryURL.split('/').find(x => x.match(/^[0-9]+$/)))
   const canonicalLink = unslice(rel(pm.get.attribute(selectOne(page, 'link[rel=canonical]'), 'href'), entryURL))
@@ -112,7 +117,7 @@ async function scrapePage ({ searchData, entryURL, categories, category }) {
       }
     }
 
-    console.log(searchData[id])
+    if (argv.verbose) console.log(searchData[id])
   }
 }
 
@@ -139,7 +144,7 @@ async function run () {
   const queue = new PQueue({ concurrency: argv.concurrency })
 
   const scrapeCategory = async ({ pageURL, entryURLs }) => {
-    console.log(`Scanning ${pageURL}`)
+    if (argv.verbose) console.log(`Scanning ${pageURL}`)
     const page = await readSite(pageURL)
     const nextPageLink = selectOne(page, '.search-pager-next a')
     const resultLinks = selectAll(page, '.search-result-title a')
@@ -158,8 +163,10 @@ async function run () {
     }
   }
 
+  console.log('Scraping category pages for entry links...')
+
   for (const category in categories) {
-    console.log(`Looking at Category: ${category}...`)
+    if (argv.verbose) console.log(`Looking at Category: ${category}...`)
 
     const entryURLs = categoryEntryURLs[category] = []
     let pageURL = categories[category]
@@ -168,6 +175,8 @@ async function run () {
   }
 
   await queue.onEmpty()
+
+  console.log('Scraping entry links for entry data...')
 
   for (const category in categoryEntryURLs) {
     const categoryEntries = categoryEntryURLs[category]
@@ -181,6 +190,8 @@ async function run () {
   await queue.onEmpty()
 
   await fs.writeJson(argv.data, searchData)
+
+  console.log('Done scraping SpreadTheSign')
 }
 
 run()
