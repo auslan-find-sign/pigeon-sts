@@ -129,7 +129,7 @@ async function scrapePage ({ searchData, entryURL, categories, category }) {
       }
     }
 
-    if (argv.verbose) console.log(searchData[id])
+    // if (argv.verbose) console.log(searchData[id])
   }
 }
 
