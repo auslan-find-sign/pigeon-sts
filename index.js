@@ -9,7 +9,6 @@ import fetch from 'cross-fetch'
 import './array-at-polyfill.js'
 import parseDuration from 'parse-duration'
 import PQueue from 'p-queue'
-import { pipeline } from 'stream/promises'
 
 const { argv } = yargs(hideBin(process.argv))
   .option('url', {
@@ -93,8 +92,21 @@ async function scrapePage ({ searchData, entryURL, categories, category }) {
   const kind = unslice(pm.get.text(selectOne(page, '.search-result.open small')).trim())
   const body = unslice(pm.get.attribute(selectOne(page, 'meta[name=description]'), 'content'))
   const media = selectAll(page, 'video').map(x => (
-    { method: 'fetch', url: unslice(pm.get.attribute(x, 'src')) }
+    { method: 'fetch', url: unslice(rel(pm.get.attribute(x, 'src'), entryURL)) }
   ))
+
+  const variantLinks = selectAll(page, '#show-result ul.nav li:not(.active) a')
+  if (variantLinks && variantLinks.length > 0) {
+    for (const variantLink of variantLinks) {
+      const variantURL = rel(pm.get.attribute(variantLink, 'href'), entryURL)
+      if (argv.verbose) console.log(`Reading variant page ${variantURL}`)
+      const variantPage = await readSite(variantURL)
+      const variantMedia = selectAll(variantPage, 'video').map(x => (
+        { method: 'fetch', url: unslice(rel(pm.get.attribute(x, 'src'), entryURL)) }
+      ))
+      media.push(...variantMedia)
+    }
+  }
 
   if (media.length > 0) {
     const existing = searchData[id] || { tags: [] }
